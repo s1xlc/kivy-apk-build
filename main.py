@@ -2,10 +2,8 @@ import os
 import math
 import struct
 from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.anchorlayout import AnchorLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
-from kivy.uix.button import Button
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.core.window import Window
@@ -34,12 +32,13 @@ def create_wav_file(filename, duration, frequency=800.0):
         f.write(header + audio_data)
     return filepath
 
-class TimerApp(App):
-    def build(self):
+class MainScreen(FloatLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.time_elapsed = 0.0
         self.is_running = False
 
-        # Create sound files in user data directory
+        # Load sound files
         try:
             start_path = create_wav_file('start_beep.wav', 0.99, frequency=880.0)
             stop_path = create_wav_file('stop_beep.wav', 0.50, frequency=660.0)
@@ -49,53 +48,33 @@ class TimerApp(App):
             self.start_sound = None
             self.stop_sound = None
 
-        # Main fullscreen button container so tapping ANYWHERE triggers action
-        self.screen_btn = Button(
-            background_color=(0, 0, 0, 1),
-            background_normal='',
-            size_hint=(1, 1)
-        )
-        self.screen_btn.bind(on_press=self.handle_screen_tap)
-
-        # Layout inside the fullscreen button
-        layout = BoxLayout(orientation='vertical', padding=[20, 20, 20, 20])
-
-        # Top spacer to push content downward
-        layout.add_widget(BoxLayout(size_hint_y=1))
-
-        # Center area: Timer display
-        timer_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=180)
+        # Timer Display (Centered)
         self.timer_label = Label(
             text="00:00.00",
-            font_size='90sp',
+            font_size='80sp',
             bold=True,
             color=(0, 1, 0, 1),
-            halign='center',
-            valign='middle'
+            size_hint=(1, None),
+            height=120,
+            pos_hint={'center_x': 0.5, 'center_y': 0.55}
         )
-        timer_container.add_widget(self.timer_label)
-        layout.add_widget(timer_container)
 
-        # Center area: Made by syri directly under the timer
-        syri_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=50)
-        syri_label = Label(
+        # Made by syri Label (Centered right under the timer)
+        self.syri_label = Label(
             text="Made by syri",
-            font_size='20sp',
+            font_size='22sp',
             bold=True,
             color=(1, 1, 1, 1),
-            halign='center',
-            valign='middle'
+            size_hint=(1, None),
+            height=40,
+            pos_hint={'center_x': 0.5, 'center_y': 0.42}
         )
-        syri_container.add_widget(syri_label)
-        layout.add_widget(syri_container)
 
-        # Bottom spacer to keep timer and label centered
-        layout.add_widget(BoxLayout(size_hint_y=1))
+        self.add_widget(self.timer_label)
+        self.add_widget(self.syri_label)
 
-        self.screen_btn.add_widget(layout)
-        return self.screen_btn
-
-    def handle_screen_tap(self, instance):
+    def on_touch_down(self, touch):
+        """Triggers when tapping anywhere on the screen."""
         if self.is_running:
             # STOP: Pause timer and play 0.5s beep
             Clock.unschedule(self.update_timer)
@@ -113,6 +92,7 @@ class TimerApp(App):
                     self.start_sound.play()
                 Clock.schedule_interval(self.update_timer, 0.05)
                 self.is_running = True
+        return True
 
     def update_timer(self, dt):
         self.time_elapsed += dt
@@ -120,6 +100,10 @@ class TimerApp(App):
         seconds = int(self.time_elapsed % 60)
         centiseconds = int((self.time_elapsed * 100) % 100)
         self.timer_label.text = f"{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
+
+class TimerApp(App):
+    def build(self):
+        return MainScreen()
 
 if __name__ == '__main__':
     TimerApp().run()
