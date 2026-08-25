@@ -32,8 +32,9 @@ jobs:
         pip install buildozer
 
     - name: Build APK
+      env:
+        ANDROIDNDK: ${{ env.ANDROID_NDK_HOME }}
       run: |
-        yes | buildozer -s android debug || true
         buildozer -s android debug
 
     - name: Upload APK Artifact
