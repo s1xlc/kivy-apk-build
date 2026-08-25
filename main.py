@@ -41,7 +41,7 @@ class MainScreen(FloatLayout):
         # Load sound files
         try:
             start_path = create_wav_file('start_beep.wav', 0.99, frequency=880.0)
-            stop_path = create_wav_file('stop_beep.wav', 0.50, frequency=660.0)
+            stop_path = create_wav_file('stop_beep.wav', 0.15, frequency=660.0)  # Shortened to 0.15s
             self.start_sound = SoundLoader.load(start_path)
             self.stop_sound = SoundLoader.load(stop_path)
         except Exception:
@@ -76,7 +76,7 @@ class MainScreen(FloatLayout):
     def on_touch_down(self, touch):
         """Triggers when tapping anywhere on the screen."""
         if self.is_running:
-            # STOP: Pause timer and play 0.5s beep
+            # STOP: Pause timer and play short 0.15s beep
             Clock.unschedule(self.update_timer)
             self.is_running = False
             if self.stop_sound:
