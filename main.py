@@ -1,3 +1,4 @@
+import os
 import math
 import struct
 from kivy.app import App
@@ -8,24 +9,19 @@ from kivy.uix.button import Button
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.core.window import Window
-from kivy.graphics import Color, Line
 
 Window.clearcolor = (0, 0, 0, 1)
 
-def generate_beep_sound():
-    """Generates a 0.5-second sine wave beep sound dynamically."""
+def create_wav_file(filename, duration, frequency=800.0):
+    """Generates and writes a valid PCM WAV sound file to disk."""
     sample_rate = 22050
-    duration = 0.5  # 0.5 seconds
-    frequency = 800.0  # 800 Hz pitch
     num_samples = int(sample_rate * duration)
     
     audio_data = bytearray()
     for i in range(num_samples):
-        # Generate 16-bit PCM mono audio sample
         sample = int(32767 * 0.5 * math.sin(2 * math.pi * frequency * i / sample_rate))
         audio_data.extend(struct.pack('<h', sample))
         
-    # Standard WAV Header (44 bytes)
     header = bytearray(b'RIFF')
     header.extend(struct.pack('<I', 36 + len(audio_data)))
     header.extend(b'WAVEfmt ')
@@ -33,105 +29,88 @@ def generate_beep_sound():
     header.extend(b'data')
     header.extend(struct.pack('<I', len(audio_data)))
     
-    wav_bytes = bytes(header + audio_data)
-    sound = SoundLoader.load_data(wav_bytes, ext='wav')
-    return sound
-
-class BorderedButton(Button):
-    """Button widget with a custom border frame outline."""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        with self.canvas.after:
-            Color(1, 1, 1, 0.8)  # White border color
-            self.border_line = Line(width=1.5)
-        self.bind(pos=self._update_border, size=self._update_border)
-
-    def _update_border(self, *args):
-        self.border_line.rectangle = (self.x, self.y, self.width, self.height)
+    filepath = os.path.join(App.get_running_app().user_data_dir, filename)
+    with open(filepath, 'wb') as f:
+        f.write(header + audio_data)
+    return filepath
 
 class TimerApp(App):
     def build(self):
         self.time_elapsed = 0.0
         self.is_running = False
-        
-        # Load the 0.5s beep sound
+
+        # Create sound files in user data directory
         try:
-            self.beep_sound = generate_beep_sound()
+            start_path = create_wav_file('start_beep.wav', 0.99, frequency=880.0)
+            stop_path = create_wav_file('stop_beep.wav', 0.50, frequency=660.0)
+            self.start_sound = SoundLoader.load(start_path)
+            self.stop_sound = SoundLoader.load(stop_path)
         except Exception:
-            self.beep_sound = None
+            self.start_sound = None
+            self.stop_sound = None
 
-        # Main Layout
-        main_layout = BoxLayout(orientation='vertical')
+        # Main fullscreen button container so tapping ANYWHERE triggers action
+        self.screen_btn = Button(
+            background_color=(0, 0, 0, 1),
+            background_normal='',
+            size_hint=(1, 1)
+        )
+        self.screen_btn.bind(on_press=self.handle_screen_tap)
 
-        # Center area for the main timer display
-        timer_container = AnchorLayout(anchor_x='center', anchor_y='center')
-        
-        self.timer_label = Button(
+        # Layout inside the fullscreen button
+        layout = BoxLayout(orientation='vertical', padding=[20, 20, 20, 20])
+
+        # Top spacer to push content downward
+        layout.add_widget(BoxLayout(size_hint_y=1))
+
+        # Center area: Timer display
+        timer_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=180)
+        self.timer_label = Label(
             text="00:00.00",
             font_size='90sp',
             bold=True,
             color=(0, 1, 0, 1),
-            background_color=(0, 0, 0, 0),
-            background_normal='',
-            size_hint=(None, None),
-            size=(Window.width, 250)
+            halign='center',
+            valign='middle'
         )
-        self.timer_label.bind(on_press=self.handle_timer_tap)
         timer_container.add_widget(self.timer_label)
-        main_layout.add_widget(timer_container)
+        layout.add_widget(timer_container)
 
-        # Bottom Bar for "Made by syri" and "RESET"
-        bottom_bar = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=70,
-            padding=[25, 10, 25, 20]
-        )
-
-        # Made by syri Label (Bold & White Color)
+        # Center area: Made by syri directly under the timer
+        syri_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=50)
         syri_label = Label(
             text="Made by syri",
-            font_size='18sp',
+            font_size='20sp',
             bold=True,
             color=(1, 1, 1, 1),
-            halign='left',
-            valign='center'
+            halign='center',
+            valign='middle'
         )
-        syri_label.bind(size=syri_label.setter('text_size'))
+        syri_container.add_widget(syri_label)
+        layout.add_widget(syri_container)
 
-        # RESET Button with border frame outline
-        reset_btn = BorderedButton(
-            text="RESET",
-            font_size='16sp',
-            bold=True,
-            color=(1, 1, 1, 1),
-            background_color=(0, 0, 0, 0),
-            background_normal='',
-            size_hint=(None, None),
-            size=(110, 45)
-        )
-        reset_btn.bind(on_press=self.reset_timer)
+        # Bottom spacer to keep timer and label centered
+        layout.add_widget(BoxLayout(size_hint_y=1))
 
-        bottom_bar.add_widget(syri_label)
-        bottom_bar.add_widget(reset_btn)
+        self.screen_btn.add_widget(layout)
+        return self.screen_btn
 
-        main_layout.add_widget(bottom_bar)
-
-        return main_layout
-
-    def handle_timer_tap(self, instance):
+    def handle_screen_tap(self, instance):
         if self.is_running:
-            # Tap to STOP: Pause timer and play 0.5s beep
+            # STOP: Pause timer and play 0.5s beep
             Clock.unschedule(self.update_timer)
             self.is_running = False
-            if self.beep_sound:
-                self.beep_sound.play()
+            if self.stop_sound:
+                self.stop_sound.play()
         else:
-            # Tap again while stopped: RESET or START if already 0
             if self.time_elapsed > 0.0:
+                # RESET if stopped with time on clock
                 self.time_elapsed = 0.0
                 self.timer_label.text = "00:00.00"
             else:
+                # START: Play 0.99s beep and start timer
+                if self.start_sound:
+                    self.start_sound.play()
                 Clock.schedule_interval(self.update_timer, 0.05)
                 self.is_running = True
 
@@ -141,13 +120,6 @@ class TimerApp(App):
         seconds = int(self.time_elapsed % 60)
         centiseconds = int((self.time_elapsed * 100) % 100)
         self.timer_label.text = f"{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
-
-    def reset_timer(self, instance):
-        if self.is_running:
-            Clock.unschedule(self.update_timer)
-            self.is_running = False
-        self.time_elapsed = 0.0
-        self.timer_label.text = "00:00.00"
 
 if __name__ == '__main__':
     TimerApp().run()
