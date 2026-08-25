@@ -1,135 +1,98 @@
-import time
-import math
-import wave
-import struct
 from kivy.app import App
-from kivy.clock import Clock
-from kivy.core.audio import SoundLoader
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.anchorlayout import AnchorLayout
-from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.clock import Clock
+from kivy.core.window import Window
 
-def generate_beep_sound(filename="beep.wav", duration=1.0, freq=880.0):
-    """Generates a simple 1-second 880Hz beep WAV file if one doesn't exist."""
-    sample_rate = 44100
-    num_samples = int(sample_rate * duration)
-    with wave.open(filename, 'w') as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        for i in range(num_samples):
-            val = int(32767.0 * 0.5 * (math.sin(2.0 * math.pi * freq * i / sample_rate)))
-            wav_file.writeframes(struct.pack('<h', val))
+Window.clearcolor = (0, 0, 0, 1)
 
-try:
-    generate_beep_sound()
-except Exception:
-    pass
+class TimerApp(App):
+    def build(self):
+        self.time_elapsed = 0.0
+        self.is_running = False
 
-class ChallengeStopwatch(BoxLayout):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = 'vertical'
+        # Main Layout
+        main_layout = BoxLayout(orientation='vertical')
 
-        # State Variables
-        self.running = False
-        self.start_time = 0.0
-        self.elapsed_time = 0.0
-
-        # Load Beep Sound
-        self.beep_sound = SoundLoader.load('beep.wav')
-
-        # Main Display Label (Minutes:Seconds.Hundredths)
-        self.timer_label = Label(
+        # Center area for the main timer display
+        timer_container = AnchorLayout(anchor_x='center', anchor_y='center')
+        
+        self.timer_label = Button(
             text="00:00.00",
-            font_size='64sp',
+            font_size='90sp',
             bold=True,
-            color=(0, 1, 0, 1), # Bright green digital display
-            size_hint=(1, 0.8)
-        )
-        self.add_widget(self.timer_label)
-
-        # Bottom Controls Layout
-        bottom_panel = BoxLayout(size_hint=(1, 0.2), padding=[15, 10])
-
-        # Bottom Left: "made by syri" label
-        left_anchor = AnchorLayout(anchor_x='left', anchor_y='bottom', size_hint=(0.5, 1))
-        self.credit_label = Label(
-            text="made by syri",
-            font_size='14sp',
-            color=(0.7, 0.7, 0.7, 1), # Light grey tint
+            color=(0, 1, 0, 1),
+            background_color=(0, 0, 0, 0),
+            background_normal='',
             size_hint=(None, None),
-            size=(120, 30)
+            size=(Window.width, 200)
         )
-        left_anchor.add_widget(self.credit_label)
-        bottom_panel.add_widget(left_anchor)
+        self.timer_label.bind(on_press=self.toggle_timer)
+        timer_container.add_widget(self.timer_label)
+        main_layout.add_widget(timer_container)
 
-        # Bottom Right: Smaller Reset Button
-        right_anchor = AnchorLayout(anchor_x='right', anchor_y='bottom', size_hint=(0.5, 1))
-        self.reset_button = Button(
+        # Bottom Bar for "Made by syri" and "RESET"
+        bottom_bar = BoxLayout(
+            orientation='horizontal',
+            size_hint_y=None,
+            height=60,
+            padding=[20, 10, 20, 15]
+        )
+
+        # Made by syri Label (Bold, White & Bright)
+        syri_label = Label(
+            text="Made by syri",
+            font_size='18sp',
+            bold=True,
+            color=(1, 1, 1, 1),
+            halign='left',
+            valign='center'
+        )
+        syri_label.bind(size=syri_label.setter('text_size'))
+
+        # RESET Button (Bold, White & Bright)
+        reset_btn = Button(
             text="RESET",
-            font_size='14sp',
+            font_size='18sp',
             bold=True,
-            background_color=(0.8, 0.2, 0.2, 1),
-            size_hint=(None, None),
-            size=(100, 40) # Smaller, compact button
+            color=(1, 1, 1, 1),
+            background_color=(0, 0, 0, 0),
+            background_normal='',
+            size_hint_x=None,
+            width=100
         )
-        self.reset_button.bind(on_press=self.reset_timer)
-        right_anchor.add_widget(self.reset_button)
-        bottom_panel.add_widget(right_anchor)
+        reset_btn.bind(on_press=self.reset_timer)
 
-        self.add_widget(bottom_panel)
+        bottom_bar.add_widget(syri_label)
+        bottom_bar.add_widget(reset_btn)
 
-    def on_touch_down(self, touch):
-        # Ignore touches intended for the Reset Button
-        if self.reset_button.collide_point(*touch.pos):
-            return super().on_touch_down(touch)
+        main_layout.add_widget(bottom_bar)
 
-        # Tap anywhere else on the screen to start/stop
-        self.toggle_timer()
-        return True
+        return main_layout
 
-    def toggle_timer(self):
-        if not self.running:
-            # Play beep ONLY when starting the timer
-            if self.beep_sound:
-                self.beep_sound.stop()
-                self.beep_sound.play()
-
-            # Start timer
-            self.start_time = time.time() - self.elapsed_time
-            self.running = True
-            Clock.schedule_interval(self.update_clock, 1 / 60) # 60 FPS update
+    def toggle_timer(self, instance):
+        if self.is_running:
+            Clock.unschedule(self.update_timer)
+            self.is_running = False
         else:
-            # Pause timer (no beep played)
-            self.running = False
-            Clock.unschedule(self.update_clock)
+            Clock.schedule_interval(self.update_timer, 0.05)
+            self.is_running = True
 
-    def update_clock(self, dt):
-        if self.running:
-            self.elapsed_time = time.time() - self.start_time
-            self.render_display()
-
-    def render_display(self):
-        minutes = int(self.elapsed_time // 60)
-        seconds = int(self.elapsed_time % 60)
-        hundredths = int((self.elapsed_time * 100) % 100)
-
-        self.timer_label.text = f"{minutes:02d}:{seconds:02d}.{hundredths:02d}"
+    def update_timer(self, dt):
+        self.time_elapsed += dt
+        minutes = int(self.time_elapsed // 60)
+        seconds = int(self.time_elapsed % 60)
+        centiseconds = int((self.time_elapsed * 100) % 100)
+        self.timer_label.text = f"{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
 
     def reset_timer(self, instance):
-        if self.running:
-            self.running = False
-            Clock.unschedule(self.update_clock)
-        
-        self.elapsed_time = 0.0
-        self.render_display()
-
-class StopwatchApp(App):
-    def build(self):
-        self.title = "Challenge Stopwatch"
-        return ChallengeStopwatch()
+        if self.is_running:
+            Clock.unschedule(self.update_timer)
+            self.is_running = False
+        self.time_elapsed = 0.0
+        self.timer_label.text = "00:00.00"
 
 if __name__ == '__main__':
-    StopwatchApp().run()
+    TimerApp().run()
